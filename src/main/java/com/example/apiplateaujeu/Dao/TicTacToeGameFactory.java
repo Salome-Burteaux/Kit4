@@ -1,4 +1,4 @@
-package com.example.apiplateaujeu.Interfaces;
+package com.example.apiplateaujeu.Dao;
 
 public interface TicTacToeGameFactory {
 

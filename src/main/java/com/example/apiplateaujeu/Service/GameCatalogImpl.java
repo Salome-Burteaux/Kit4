@@ -1,7 +1,6 @@
 package com.example.apiplateaujeu.Service;
 
-import com.example.apiplateaujeu.Interfaces.GameCatalog;
-import com.example.apiplateaujeu.Interfaces.TicTacToeGameFactory;
+import com.example.apiplateaujeu.Dao.TicTacToeGameFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 

@@ -1,4 +1,4 @@
-package com.example.apiplateaujeu.Interfaces;
+package com.example.apiplateaujeu.Service;
 
 import java.util.Collection;
 
