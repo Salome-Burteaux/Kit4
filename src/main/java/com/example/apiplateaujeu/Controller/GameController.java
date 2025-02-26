@@ -1,6 +1,7 @@
 package com.example.apiplateaujeu.Controller;
 
 
+import com.example.apiplateaujeu.AppConfig;
 import com.example.apiplateaujeu.Service.GameService;
 import fr.le_campus_numerique.square_games.engine.Game;
 import fr.le_campus_numerique.square_games.engine.GameFactory;
@@ -18,6 +19,9 @@ public class GameController {
 
     @Autowired
     private GameService gameService;
+
+    @Autowired
+    private AppConfig appConfig;
 
     //créer une partie
     @PostMapping("/game")

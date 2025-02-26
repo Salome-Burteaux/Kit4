@@ -32,9 +32,8 @@ public class GameServiceImpl implements GameService {
     @Override
     public ArrayList<Game> createGame(UUID userId, TypeDto typeDto) {
 
-        if (!isValidUser(userId)) {
-            throw new IllegalArgumentException("Invalid user ID");
-        }
+        isValidUser(userId);
+
 
         Set<UUID> playersIds = new HashSet<>();
         playersIds.add(userId);
@@ -135,26 +134,18 @@ public class GameServiceImpl implements GameService {
     }
 
     private boolean isValidUser(UUID userId) {
-//        HttpHeaders headers = new HttpHeaders();
-//        headers.set("X-UserId", userId.toString());
-//        HttpEntity<String> entity = new HttpEntity<>(headers);
-//        String url;
-//
-//        ResponseEntity<String> response = restTemplate.exchange(
-//            url = "http://localhost:8081/api/users/validate/"+userId.toString(),
-//            HttpMethod.GET,
-//            entity,
-//            String.class);
-
-//        return response.getStatusCode().is2xxSuccessful();
         String url = "http://localhost:8081/api/users/validate/" + userId.toString();
-        try {
-            UserDto response = restTemplate.getForObject(url, UserDto.class);
-            return response != null && response.getId().equals(userId);
 
+        try {
+            // Effectuer la requête GET sans en-tête supplémentaire
+            ResponseEntity<UserDto> response = restTemplate.exchange(url, HttpMethod.GET, null, UserDto.class);
+
+            // Vérifier si la réponse est correcte et que l'ID dans la réponse correspond à celui fourni
+            return response.getStatusCode().is2xxSuccessful() && response.getBody() != null && response.getBody().getId().equals(userId.toString());
         } catch (HttpClientErrorException.NotFound e) {
-            return false;
+            throw new IllegalArgumentException("Invalid user ID");
         }
     }
+
 
 }
