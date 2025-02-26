@@ -1,4 +1,6 @@
 package com.example.apiplateaujeu.Controller;
 
-public record TypeDto(String gameName, int playerCount, int boardSize) {
+import java.util.UUID;
+
+public record TypeDto(String gameName, UUID opponentId, int boardSize) {
 }

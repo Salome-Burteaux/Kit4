@@ -1,67 +1,90 @@
 package com.example.apiplateaujeu.Service;
 
+import com.example.apiplateaujeu.AppConfig;
 import com.example.apiplateaujeu.Controller.GameDto;
 import com.example.apiplateaujeu.Controller.MoveDto;
 import com.example.apiplateaujeu.Controller.TypeDto;
+import com.example.apiplateaujeu.Controller.UserDto;
 import fr.le_campus_numerique.square_games.engine.Game;
-import fr.le_campus_numerique.square_games.engine.connectfour.ConnectFourGame;
+import fr.le_campus_numerique.square_games.engine.GameStatus;
 import fr.le_campus_numerique.square_games.engine.connectfour.ConnectFourGameFactory;
-import fr.le_campus_numerique.square_games.engine.taquin.TaquinGame;
 import fr.le_campus_numerique.square_games.engine.taquin.TaquinGameFactory;
-import fr.le_campus_numerique.square_games.engine.tictactoe.TicTacToeGame;
 import fr.le_campus_numerique.square_games.engine.tictactoe.TicTacToeGameFactory;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.HttpHeaders;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class GameServiceImpl implements GameService {
 
-    private final ArrayList<List<String>> games = new ArrayList<>();
+    private final ArrayList<Game> games = new ArrayList<>();
+
+    @Autowired
+    private RestTemplate restTemplate;
 
     @Override
-    public ArrayList<List<String>> createGame(String userId, TypeDto typeDto, @Min(3) @Max(5) int boardSize) {
+    public ArrayList<Game> createGame(UUID userId, TypeDto typeDto) {
 
-        // récupérer le nom du jeu et instancier le bon service
+        if (!isValidUser(userId)) {
+            throw new IllegalArgumentException("Invalid user ID");
+        }
+
+        Set<UUID> playersIds = new HashSet<>();
+        playersIds.add(userId);
+
+        // Créer la partie en fonction du type de jeu
+        Game game = null;
+
         switch(typeDto.gameName()){
 
             case "tictactoe":
+                playersIds.add(typeDto.opponentId());
                 TicTacToeGameFactory ticTacToeGameFactory = new TicTacToeGameFactory();
-
-
-                ticTacToeGameFactory.createGame(boardSize, playerIds);
+                game = ticTacToeGameFactory.createGame(typeDto.boardSize(), playersIds);
                 break;
 
             case "15 puzzle":
                 TaquinGameFactory taquinGameFactory = new TaquinGameFactory();
-                TaquinGame taquinGame = taquinGameFactory.createGame(boardSize, playerIds);
+                game = taquinGameFactory.createGame(typeDto.boardSize(), playersIds);
                 break;
 
             case "connect4":
+                playersIds.add(typeDto.opponentId());
                 ConnectFourGameFactory connectFourGameFactory = new ConnectFourGameFactory();
-                ConnectFourGame connectFourGame = new ConnectFourGame(boardSize, playerIds);
+                game = connectFourGameFactory.createGame(typeDto.boardSize(), playersIds);
                 break;
 
+            default:
+                throw new IllegalArgumentException("Type de jeu non supporté");
         }
-        List<String> gameData = List.of(UUID.randomUUID().toString(), typeDto.gameName());
-        games.add(gameData);
+
+        if (game != null) {
+            games.add(game);
+        }
         return games;
     }
 
-    @Override
-    public GameDto getState(String userId, int gameId) {
-
-        return null;
-    }
 
     @Override
-    public ArrayList<List<String>> displayGameById(String userId, int gameId) {
-        return games;
+    public GameDto displayGameById(UUID userId, UUID gameId) {
+
+        if (!isValidUser(userId)) {
+            throw new IllegalArgumentException("Invalid user ID");
+        }
+
+        Game game = games.stream()
+                .filter(g -> g.getId().equals(gameId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Partie introuvable"));
+
+        return new GameDto(game.getId().toString(), game.getCurrentPlayerId().toString(), game.getStatus().toString());
     }
 
 
@@ -71,14 +94,67 @@ public class GameServiceImpl implements GameService {
     }
 
     @Override
-    public List<GameDto> getAllEndedGames(String userId) {
+    public List<Game> getOngoingGamesById(UUID userId) {
 
-        return List.of();
+        if (!isValidUser(userId)) {
+            throw new IllegalArgumentException("Invalid user ID");
+        }
+
+        return games.stream()
+                .filter(game -> game.getStatus().equals(GameStatus.ONGOING) && game.getPlayerIds().contains(userId))
+                .collect(Collectors.toList());
     }
+
+
 
     @Override
-    public GameDto makeMove(String userId, int gameId, MoveDto moveDto) {
+    public GameDto makeMove(UUID userId, UUID gameId, MoveDto moveDto) {
 
-        return null;
+        if (!isValidUser(userId)) {
+            throw new IllegalArgumentException("Invalid user ID");
+        }
+
+        //convertion de la liste games en flux (stream) pour permettre filtrage et recherche
+        Game game = games.stream()
+                .filter(g -> g.getId().equals(gameId))
+                //récupère la 1ere partie
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Partie introuvable"));
+
+        //vérifie si le joueur userId est présent dans getPlayerIds()
+        if (!game.getPlayerIds().contains(userId)) {
+            throw new IllegalArgumentException("Le joueur ne participe pas à cette partie");
+        }
+
+        //récupère l'identifiant du joueur courant (celui dont c'est le tour de jouer) et le compare à userId
+        if (!game.getCurrentPlayerId().equals(userId)) {
+            throw new IllegalArgumentException("Ce n'est pas votre tour de jouer");
+        }
+
+        return new GameDto(game.getId().toString(), game.getCurrentPlayerId().toString(), game.getStatus().toString());
     }
+
+    private boolean isValidUser(UUID userId) {
+//        HttpHeaders headers = new HttpHeaders();
+//        headers.set("X-UserId", userId.toString());
+//        HttpEntity<String> entity = new HttpEntity<>(headers);
+//        String url;
+//
+//        ResponseEntity<String> response = restTemplate.exchange(
+//            url = "http://localhost:8081/api/users/validate/"+userId.toString(),
+//            HttpMethod.GET,
+//            entity,
+//            String.class);
+
+//        return response.getStatusCode().is2xxSuccessful();
+        String url = "http://localhost:8081/api/users/validate/" + userId.toString();
+        try {
+            UserDto response = restTemplate.getForObject(url, UserDto.class);
+            return response != null && response.getId().equals(userId);
+
+        } catch (HttpClientErrorException.NotFound e) {
+            return false;
+        }
+    }
+
 }
