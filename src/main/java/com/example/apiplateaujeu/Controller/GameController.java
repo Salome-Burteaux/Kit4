@@ -20,13 +20,14 @@ public class GameController {
     @Autowired
     private GameService gameService;
 
+
     @Autowired
     private AppConfig appConfig;
 
     //créer une partie
     @PostMapping("/game")
     public ResponseEntity<ArrayList<Game>> createGame(@RequestHeader("X-UserId") UUID userId, @RequestBody TypeDto typeDto) {
-        ArrayList<Game> game = gameService.createGame(userId, typeDto);
+        ArrayList<Game> game = gameService.createGame(typeDto);
         return ResponseEntity.ok(game); //Réponse avec statut 200 OK et le corps contenant l'objet game
     }
 

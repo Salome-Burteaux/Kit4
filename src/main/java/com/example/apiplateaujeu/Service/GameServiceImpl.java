@@ -1,74 +1,74 @@
 package com.example.apiplateaujeu.Service;
 
-import com.example.apiplateaujeu.AppConfig;
 import com.example.apiplateaujeu.Controller.GameDto;
 import com.example.apiplateaujeu.Controller.MoveDto;
 import com.example.apiplateaujeu.Controller.TypeDto;
 import com.example.apiplateaujeu.Controller.UserDto;
+import com.example.apiplateaujeu.Dao.GameDao;
+import com.example.apiplateaujeu.GamePlugin.GamePlugin;
 import fr.le_campus_numerique.square_games.engine.Game;
 import fr.le_campus_numerique.square_games.engine.GameStatus;
-import fr.le_campus_numerique.square_games.engine.connectfour.ConnectFourGameFactory;
-import fr.le_campus_numerique.square_games.engine.taquin.TaquinGameFactory;
-import fr.le_campus_numerique.square_games.engine.tictactoe.TicTacToeGameFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.http.HttpHeaders;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 public class GameServiceImpl implements GameService {
-
+    private final List<GamePlugin> gamePlugins;
     private final ArrayList<Game> games = new ArrayList<>();
 
     @Autowired
     private RestTemplate restTemplate;
 
+    @Autowired
+    private GameDao gameDao;
+
+
+    public GameServiceImpl(List<GamePlugin> gamePlugins) {
+        this.gamePlugins = gamePlugins;
+    }
+
     @Override
-    public ArrayList<Game> createGame(UUID userId, TypeDto typeDto) {
-
-        isValidUser(userId);
-
-
-        Set<UUID> playersIds = new HashSet<>();
-        playersIds.add(userId);
+    public ArrayList<Game> createGame(TypeDto typeDto) {
 
         // Créer la partie en fonction du type de jeu
         Game game = null;
 
-        switch(typeDto.gameName()){
+        //récupération du plugin propre au jeu
+//        GamePlugin gamePlugin = getGamePlugin(typeDto.gameName());
 
-            case "tictactoe":
-                playersIds.add(typeDto.opponentId());
-                TicTacToeGameFactory ticTacToeGameFactory = new TicTacToeGameFactory();
-                game = ticTacToeGameFactory.createGame(typeDto.boardSize(), playersIds);
+        for (GamePlugin plugin : gamePlugins) {
+            if (plugin.getName(Locale.getDefault()).equalsIgnoreCase(typeDto.gameName())) {
+                game = plugin.createGame(Optional.of(typeDto.playerCount()), Optional.ofNullable(typeDto.boardSize()));
                 break;
-
-            case "15 puzzle":
-                TaquinGameFactory taquinGameFactory = new TaquinGameFactory();
-                game = taquinGameFactory.createGame(typeDto.boardSize(), playersIds);
-                break;
-
-            case "connect4":
-                playersIds.add(typeDto.opponentId());
-                ConnectFourGameFactory connectFourGameFactory = new ConnectFourGameFactory();
-                game = connectFourGameFactory.createGame(typeDto.boardSize(), playersIds);
-                break;
-
-            default:
-                throw new IllegalArgumentException("Type de jeu non supporté");
+            };
+        }
+        if (game == null) {
+            throw new IllegalStateException("No games found");
         }
 
-        if (game != null) {
-            games.add(game);
-        }
-        return games;
+
+//        if (gamePlugin != null) {
+//            game = gamePlugin.createGame(Optional.of(typeDto.playerCount()), Optional.of(typeDto.boardSize()));
+//            games.add(game);
+//        }
+
+        gameDao.upsert(game);
+        return new ArrayList<Game>((Collection) gameDao.findAll());
+//        return games;
     }
+    //parcours la liste de plugins pour trouver le bon gamePlugin en fonction du nom du jeu
+//    private GamePlugin getGamePlugin(String gameName) {
+//        return gamePlugins.stream()
+//                .filter(gamePlugin -> gamePlugin.getGameName().equals(gameName))
+//                .findFirst()
+//                .orElse(null);
+//    }
 
 
     @Override
@@ -141,11 +141,17 @@ public class GameServiceImpl implements GameService {
             ResponseEntity<UserDto> response = restTemplate.exchange(url, HttpMethod.GET, null, UserDto.class);
 
             // Vérifier si la réponse est correcte et que l'ID dans la réponse correspond à celui fourni
-            return response.getStatusCode().is2xxSuccessful() && response.getBody() != null && response.getBody().getId().equals(userId.toString());
+            return response.getStatusCode().is2xxSuccessful() && response.hasBody() && response.getBody().getId().equals(userId.toString());
         } catch (HttpClientErrorException.NotFound e) {
             throw new IllegalArgumentException("Invalid user ID");
         }
     }
 
+    @Override
+    public Collection<String> getGameIdentifiers(Locale locale) {
+        return gamePlugins.stream()
+                .map(gamePlugins -> gamePlugins.getName(locale))
+                .collect(Collectors.toList());
+    }
 
 }
